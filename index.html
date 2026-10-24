@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Cloud Drive - Personal Photos & Files</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Firebase SDK Modular Import Polyfill -->
+    <script type="module">
+        import { initializeApp, getApps, deleteApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        window.FirebaseSDK = {
+            initializeApp, getApps, deleteApp,
+            getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject,
+            getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, where, getDocs
+        };
+    </script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Modern subtle scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.3); border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(156, 163, 175, 0.6); }
+        .glass-panel { backdrop-filter: blur(12px); }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-slate-100 font-sans h-full flex flex-col overflow-hidden antialiased transition-colors duration-200">
+
+    <!-- TOP HEADER -->
+    <header class="h-16 border-b border-slate-200/80 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-900/80 glass-panel px-4 flex items-center justify-between shrink-0 z-20">
+        <!-- Brand / Logo -->
+        <div class="flex items-center space-x-3 w-56 shrink-0">
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+                <i class="fa-solid fa-cloud-arrow-up text-lg"></i>
+            </div>
+            <div class="flex flex-col">
+                <span class="font-bold text-base tracking-tight leading-none bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+                    MyCloud
+                </span>
+                <span class="text-[10px] text-slate-400 font-medium">Personal Storage</span>
+            </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="flex-1 max-w-xl mx-4">
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input type="text" id="searchInput" oninput="handleSearch()" 
+                       placeholder="Search photos, documents, folders..." 
+                       class="w-full pl-9 pr-8 py-2 bg-slate-100 dark:bg-zinc-800/80 border border-transparent focus:border-blue-500 rounded-xl focus:outline-none text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 transition-all">
+                <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Right Controls -->
+        <div class="flex items-center space-x-2">
+            <!-- Storage Cloud Status Badge -->
+            <button onclick="openConfigModal()" id="storageStatusBadge" class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-xl text-xs font-medium border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 transition">
+                <i id="storageStatusIcon" class="fa-solid fa-hard-drive"></i>
+                <span id="storageStatusText">Local Demo Mode</span>
+            </button>
+
+            <!-- Theme Toggle -->
+            <button onclick="toggleDarkMode()" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-600 dark:text-slate-300 transition-colors">
+                <i id="themeIcon" class="fa-solid fa-moon"></i>
+            </button>
+
+            <!-- Config / Settings Button -->
+            <button onclick="openConfigModal()" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-600 dark:text-slate-300 transition-colors" title="Firebase Settings">
+                <i class="fa-solid fa-gear"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- STORAGE MODE WARNING BANNER -->
+    <div id="demoBanner" class="bg-amber-500 text-white text-xs px-4 py-2 flex items-center justify-between shrink-0 font-medium">
+        <div class="flex items-center space-x-2">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>Local Browser Storage Active. Connect your free Firebase account for permanent cloud photo storage across devices.</span>
+        </div>
+        <button onclick="openConfigModal()" class="underline font-bold hover:text-amber-100">Connect Firebase Cloud</button>
+    </div>
+
+    <!-- BODY CONTAINER -->
+    <div class="flex flex-1 overflow-hidden relative">
+        
+        <!-- SIDEBAR -->
+        <aside class="w-60 border-r border-slate-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900 flex flex-col justify-between p-4 shrink-0 hidden md:flex">
+            <div class="space-y-4">
+                <!-- Main Upload Buttons -->
+                <div class="space-y-2">
+                    <button onclick="triggerFileUpload()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg shadow-blue-500/20 flex items-center justify-center space-x-2 transition-all active:scale-[0.98]">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Upload Files</span>
+                    </button>
+                    <input type="file" id="fileInput" multiple class="hidden" onchange="handleFileUpload(event)">
+
+                    <button onclick="openNewFolderModal()" class="w-full bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-slate-200 font-medium py-2 px-4 rounded-xl flex items-center justify-center space-x-2 text-xs transition-all">
+                        <i class="fa-solid fa-folder-plus text-amber-500"></i>
+                        <span>New Folder</span>
+                    </button>
+                </div>
+
+                <!-- Navigation List -->
+                <nav class="space-y-1 pt-3 border-t border-slate-100 dark:border-zinc-800">
+                    <button onclick="setFilterCategory('all')" id="nav-all" class="w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-xs font-semibold bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400">
+                        <i class="fa-solid fa-hard-drive w-4"></i>
+                        <span>My Drive</span>
+                    </button>
+                    <button onclick="setFilterCategory('photos')" id="nav-photos" class="w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800/60 transition">
+                        <i class="fa-solid fa-image text-pink-500 w-4"></i>
+                        <span>Photos Gallery</span>
+                    </button>
+                    <button onclick="setFilterCategory('documents')" id="nav-documents" class="w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800/60 transition">
+                        <i class="fa-solid fa-file-lines text-blue-500 w-4"></i>
+                        <span>Documents</span>
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Storage Indicator Footer -->
+            <div class="p-3 bg-slate-50 dark:bg-zinc-800/50 border border-slate-200/60 dark:border-zinc-800 rounded-2xl space-y-2">
+                <div class="flex justify-between text-xs font-semibold">
+                    <span class="text-slate-500 dark:text-slate-400">Used Storage</span>
+                    <span id="storagePercentText" class="text-blue-600 dark:text-blue-400">0%</span>
+                </div>
+                <div class="w-full bg-slate-200 dark:bg-zinc-700 h-2 rounded-full overflow-hidden">
+                    <div id="storageProgressBar" class="bg-gradient-to-r from-blue-500 to-indigo-600 h-full w-0 transition-all duration-300"></div>
+                </div>
+                <p id="storageCapacityText" class="text-[10px] text-slate-400 truncate">0 MB Used</p>
+            </div>
+        </aside>
+
+        <!-- MAIN DISPLAY AREA -->
+        <main id="dropArea" class="flex-1 flex flex-col overflow-hidden bg-slate-50/50 dark:bg-zinc-950/50 relative">
+            
+            <!-- Upload Drag & Drop Overlay -->
+            <div id="dragOverlay" class="absolute inset-0 bg-blue-600/10 backdrop-blur-sm border-2 border-dashed border-blue-500 rounded-2xl m-4 z-30 flex flex-col items-center justify-center pointer-events-none opacity-0 transition-opacity">
+                <i class="fa-solid fa-cloud-arrow-up text-5xl text-blue-600 mb-2 animate-bounce"></i>
+                <p class="font-bold text-blue-600 text-lg">Drop photos & files here to upload</p>
+            </div>
+
+            <!-- Breadcrumbs & Toolbar -->
+            <div class="p-4 flex flex-wrap gap-2 items-center justify-between border-b border-slate-200/60 dark:border-zinc-800/60 shrink-0">
+                <!-- Breadcrumb Path Navigation -->
+                <nav id="breadcrumbs" class="flex items-center space-x-1.5 text-xs font-medium overflow-x-auto py-1">
+                    <!-- Injected dynamically -->
+                </nav>
+
+                <!-- Action Controls -->
+                <div class="flex items-center space-x-2">
+                    <!-- Mobile Buttons -->
+                    <button onclick="triggerFileUpload()" class="md:hidden p-2 rounded-xl bg-blue-600 text-white shadow">
+                        <i class="fa-solid fa-plus text-xs"></i>
+                    </button>
+                    <button onclick="openNewFolderModal()" class="md:hidden p-2 rounded-xl bg-slate-100 dark:bg-zinc-800 text-amber-500">
+                        <i class="fa-solid fa-folder-plus text-xs"></i>
+                    </button>
+
+                    <!-- View Switchers -->
+                    <div class="flex items-center bg-slate-200/60 dark:bg-zinc-800/60 p-1 rounded-xl">
+                        <button onclick="setViewMode('grid')" id="gridViewBtn" class="p-1.5 rounded-lg text-xs text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-700 shadow-sm">
+                            <i class="fa-solid fa-grip"></i>
+                        </button>
+                        <button onclick="setViewMode('list')" id="listViewBtn" class="p-1.5 rounded-lg text-xs text-slate-400">
+                            <i class="fa-solid fa-list"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upload Progress Bar Indicator -->
+            <div id="uploadProgressContainer" class="hidden px-4 py-2 bg-blue-50 dark:bg-blue-950/30 border-b border-blue-100 dark:border-blue-900/50 flex items-center justify-between">
+                <div class="flex items-center space-x-3 flex-1 mr-4">
+                    <i class="fa-solid fa-spinner fa-spin text-blue-600 dark:text-blue-400 text-xs"></i>
+                    <div class="flex-1">
+                        <div class="flex justify-between text-[11px] font-semibold text-blue-700 dark:text-blue-300 mb-1">
+                            <span id="uploadStatusText">Uploading files...</span>
+                            <span id="uploadPercentText">0%</span>
+                        </div>
+                        <div class="w-full bg-blue-200 dark:bg-blue-900 h-1.5 rounded-full overflow-hidden">
+                            <div id="uploadProgressBar" class="bg-blue-600 h-full w-0 transition-all"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONTENT LISTING AREA -->
+            <div class="flex-1 overflow-y-auto p-4 md:p-6" id="contentScrollArea">
+                
+                <!-- Empty State -->
+                <div id="emptyState" class="hidden h-full flex flex-col items-center justify-center text-center p-8">
+                    <div class="w-20 h-20 bg-blue-50 dark:bg-zinc-900 text-blue-500 rounded-3xl flex items-center justify-center text-3xl mb-4 border border-blue-100 dark:border-zinc-800">
+                        <i class="fa-solid fa-images"></i>
+                    </div>
+                    <h3 class="font-bold text-base mb-1">Your Drive is Empty</h3>
+                    <p class="text-xs text-slate-400 max-w-sm mb-4">Upload personal photos, backup videos, or create folders to stay organized.</p>
+                    <button onclick="triggerFileUpload()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-xl shadow-lg shadow-blue-500/20 transition">
+                        Upload First Photo
+                    </button>
+                </div>
+
+                <!-- Folders Section -->
+                <div id="foldersSection" class="mb-6 hidden">
+                    <h4 class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Folders</h4>
+                    <div id="foldersContainer" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                        <!-- Folders inject here -->
+                    </div>
+                </div>
+
+                <!-- Files/Photos Section -->
+                <div id="filesSection" class="hidden">
+                    <h4 class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Files & Photos</h4>
+                    <div id="filesContainer" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        <!-- Files inject here -->
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL: FIREBASE CONFIG SETTINGS -->
+    <div id="configModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 w-full max-w-lg rounded-2xl p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-fire-flame-curved text-amber-500 text-xl"></i>
+                    <h3 class="text-base font-bold">Firebase Cloud Setup</h3>
+                </div>
+                <button onclick="closeModal('configModal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                Enter your Firebase Web App Config below to enable permanent cross-device photo backup and sharing. You can get this free from <a href="https://console.firebase.google.com/" target="_blank" class="text-blue-500 underline font-semibold">Firebase Console</a>.
+            </p>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold mb-1">API Key</label>
+                    <input type="text" id="cfg_apiKey" placeholder="AIzaSy..." class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-semibold mb-1">Auth Domain</label>
+                        <input type="text" id="cfg_authDomain" placeholder="myproject.firebaseapp.com" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block font-semibold mb-1">Project ID</label>
+                        <input type="text" id="cfg_projectId" placeholder="myproject-id" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-semibold mb-1">Storage Bucket</label>
+                    <input type="text" id="cfg_storageBucket" placeholder="myproject.appspot.com" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <div class="mt-6 flex items-center justify-between pt-4 border-t border-slate-100 dark:border-zinc-800">
+                <button onclick="clearFirebaseConfig()" class="text-xs text-red-500 hover:underline">Reset to Demo Mode</button>
+                <div class="space-x-2">
+                    <button onclick="closeModal('configModal')" class="px-4 py-2 text-xs font-medium rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800">Cancel</button>
+                    <button onclick="saveFirebaseConfig()" class="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/20">Save & Connect</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: NEW FOLDER -->
+    <div id="folderModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl">
+            <h3 class="text-base font-bold mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-folder-plus text-amber-500"></i> New Folder
+            </h3>
+            <input type="text" id="folderNameInput" placeholder="Folder Title" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-6 text-xs">
+            <div class="flex justify-end space-x-2">
+                <button onclick="closeModal('folderModal')" class="px-4 py-2 text-xs font-medium rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800">Cancel</button>
+                <button onclick="createNewFolder()" class="px-4 py-2 text-xs font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: SHARE LINK -->
+    <div id="shareModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 w-full max-w-md rounded-2xl p-6 shadow-2xl">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-share-nodes text-blue-500"></i> Share Link
+                </h3>
+                <button onclick="closeModal('shareModal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Copy this public link to share your file or photo with anyone:</p>
+            <div class="flex items-center space-x-2 bg-slate-50 dark:bg-zinc-800/80 p-2 rounded-xl border border-slate-200 dark:border-zinc-700 mb-4">
+                <input type="text" id="shareUrlInput" readonly class="bg-transparent border-none text-xs w-full focus:outline-none text-slate-600 dark:text-slate-300">
+                <button onclick="copyShareLink()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shrink-0">
+                    Copy
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: LIGHTBOX / PHOTO VIEW -->
+    <div id="lightboxModal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex flex-col hidden">
+        <!-- Lightbox Top Controls -->
+        <div class="p-4 flex items-center justify-between text-white shrink-0 z-10">
+            <div class="flex items-center space-x-3 overflow-hidden">
+                <i id="lightboxIcon" class="fa-solid fa-image text-blue-400"></i>
+                <span id="lightboxTitle" class="font-semibold text-xs truncate max-w-xs md:max-w-md">Photo.jpg</span>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button onclick="zoomPhoto(1.2)" class="p-2 hover:bg-white/10 rounded-lg text-xs" title="Zoom In"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                <button onclick="zoomPhoto(0.8)" class="p-2 hover:bg-white/10 rounded-lg text-xs" title="Zoom Out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                <a id="lightboxDownloadBtn" download href="#" target="_blank" class="p-2 hover:bg-white/10 rounded-lg text-xs" title="Download"><i class="fa-solid fa-download"></i></a>
+                <button onclick="closeModal('lightboxModal')" class="p-2 hover:bg-red-500/20 text-red-400 rounded-lg text-xs"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </div>
+
+        <!-- Lightbox Canvas / Image Container -->
+        <div class="flex-1 flex items-center justify-center p-4 overflow-hidden relative">
+            <button onclick="navigateLightbox(-1)" class="absolute left-4 p-3 bg-black/40 hover:bg-black/70 text-white rounded-full text-xs z-10"><i class="fa-solid fa-chevron-left"></i></button>
+            <div id="lightboxMediaContainer" class="max-w-full max-h-full flex items-center justify-center transition-transform duration-200">
+                <!-- Image or Media element injected -->
+            </div>
+            <button onclick="navigateLightbox(1)" class="absolute right-4 p-3 bg-black/40 hover:bg-black/70 text-white rounded-full text-xs z-10"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+
+        <!-- Lightbox Metadata Footer -->
+        <div class="p-3 bg-zinc-900/90 text-slate-400 text-[11px] flex items-center justify-between px-6 shrink-0 border-t border-zinc-800">
+            <span id="lightboxMetaSize">0 KB</span>
+            <span id="lightboxMetaDate">Upload Date</span>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-zinc-900 text-white px-4 py-2.5 rounded-xl text-xs font-semibold shadow-xl border border-zinc-800 flex items-center space-x-2 transform translate-y-20 opacity-0 transition-all duration-300 z-50">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-green-400"></i>
+        <span id="toastMsg">Notification message</span>
+    </div>
+
+    <!-- CORE JAVASCRIPT APP LOGIC -->
+    <script>
+        // --- APP STATE ---
+        let currentFolderId = 'root';
+        let folderStack = [{ id: 'root', name: 'My Drive' }];
+        let viewMode = 'grid'; // 'grid' | 'list'
+        let filterCategory = 'all'; // 'all' | 'photos' | 'documents'
+        let searchQuery = '';
+        let currentZoom = 1;
+        let lightboxIndex = -1;
+
+        // Drive Data Schema
+        let driveData = JSON.parse(localStorage.getItem('mycloud_drive_data')) || {
+            folders: [],
+            files: []
+        };
+
+        // Firebase Service Handles
+        let fbApp = null, fbStorage = null, fbDb = null;
+        let firebaseConfig = JSON.parse(localStorage.getItem('mycloud_firebase_config')) || null;
+
+        // --- FIREBASE INITIALIZATION ---
+        function initFirebase() {
+            if (!firebaseConfig || !firebaseConfig.apiKey) {
+                document.getElementById('demoBanner').classList.remove('hidden');
+                document.getElementById('storageStatusBadge').classList.add('hidden');
+                return false;
+            }
+
+            try {
+                const { initializeApp, getApps, deleteApp, getStorage, getFirestore } = window.FirebaseSDK;
+                if (getApps().length > 0) {
+                    deleteApp(getApps()[0]);
+                }
+                fbApp = initializeApp(firebaseConfig);
+                fbStorage = getStorage(fbApp);
+                fbDb = getFirestore(fbApp);
+
+                document.getElementById('demoBanner').classList.add('hidden');
+                const badge = document.getElementById('storageStatusBadge');
+                badge.classList.remove('hidden');
+                document.getElementById('storageStatusText').innerText = "Firebase Cloud Connected";
+                document.getElementById('storageStatusIcon').className = "fa-solid fa-cloud text-blue-500";
+                
+                subscribeFirestore();
+                return true;
+            } catch (err) {
+                console.error("Firebase Initialization Error:", err);
+                showToast("Firebase Config Error!", "error");
+                return false;
+            }
+        }
+
+        // Realtime Firestore Listener
+        function subscribeFirestore() {
+            if (!fbDb) return;
+            const { collection, onSnapshot } = window.FirebaseSDK;
+            
+            // Listen for files
+            onSnapshot(collection(fbDb, "cloud_files"), (snapshot) => {
+                driveData.files = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                saveLocalData();
+                render();
+            });
+
+            // Listen for folders
+            onSnapshot(collection(fbDb, "cloud_folders"), (snapshot) => {
+                driveData.folders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                saveLocalData();
+                render();
+            });
+        }
+
+        function saveLocalData() {
+            localStorage.setItem('mycloud_drive_data', JSON.stringify(driveData));
+        }
+
+        // --- RENDER LOGIC ---
+        function render() {
+            const foldersContainer = document.getElementById('foldersContainer');
+            const filesContainer = document.getElementById('filesContainer');
+            const foldersSection = document.getElementById('foldersSection');
+            const filesSection = document.getElementById('filesSection');
+            const emptyState = document.getElementById('emptyState');
+
+            foldersContainer.innerHTML = '';
+            filesContainer.innerHTML = '';
+
+            let folders = driveData.folders.filter(f => f.parentId === currentFolderId);
+            let files = driveData.files.filter(f => f.folderId === currentFolderId);
+
+            // Filter Categories
+            if (filterCategory === 'photos') {
+                files = driveData.files.filter(f => f.type && f.type.startsWith('image/'));
+                folders = [];
+            } else if (filterCategory === 'documents') {
+                files = driveData.files.filter(f => f.type && !f.type.startsWith('image/'));
+                folders = [];
+            }
+
+            // Search Query
+            if (searchQuery.trim() !== '') {
+                const q = searchQuery.toLowerCase();
+                folders = driveData.folders.filter(f => f.name.toLowerCase().includes(q));
+                files = driveData.files.filter(f => f.name.toLowerCase().includes(q));
+            }
+
+            const isEmpty = folders.length === 0 && files.length === 0;
+
+            if (isEmpty) {
+                emptyState.classList.remove('hidden');
+                foldersSection.classList.add('hidden');
+                filesSection.classList.add('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+
+                if (folders.length > 0) {
+                    foldersSection.classList.remove('hidden');
+                    folders.forEach(folder => foldersContainer.appendChild(createFolderCard(folder)));
+                } else {
+                    foldersSection.classList.add('hidden');
+                }
+
+                if (files.length > 0) {
+                    filesSection.classList.remove('hidden');
+                    files.forEach((file, idx) => filesContainer.appendChild(createFileCard(file, idx)));
+                } else {
+                    filesSection.classList.add('hidden');
+                }
+            }
+
+            renderBreadcrumbs();
+            updateStorageMetrics();
+        }
+
+        // --- ITEM CARDS ---
+        function createFolderCard(folder) {
+            const div = document.createElement('div');
+            div.className = "group bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800/80 rounded-2xl p-3 flex items-center justify-between shadow-sm hover:border-blue-500 transition cursor-pointer";
+            div.innerHTML = `
+                <div onclick="openFolder('${folder.id}', '${escapeHtml(folder.name)}')" class="flex items-center space-x-3 overflow-hidden flex-1">
+                    <i class="fa-solid fa-folder text-amber-500 text-lg shrink-0"></i>
+                    <span class="text-xs font-semibold truncate">${escapeHtml(folder.name)}</span>
+                </div>
+                <button onclick="deleteFolder('${folder.id}', event)" class="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                </button>
+            `;
+            return div;
+        }
+
+        function createFileCard(file, index) {
+            const div = document.createElement('div');
+            const isImage = file.type && file.type.startsWith('image/');
+            const iconClass = getFileIcon(file.type);
+
+            if (viewMode === 'grid') {
+                div.className = "group relative bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800/80 rounded-2xl p-2.5 flex flex-col justify-between shadow-sm hover:border-blue-500 transition";
+                
+                let previewHtml = `<div class="w-full h-28 rounded-xl bg-slate-100 dark:bg-zinc-800 flex items-center justify-center text-blue-500 mb-2 overflow-hidden">
+                    <i class="${iconClass} text-2xl"></i>
+                </div>`;
+
+                if (isImage && file.dataUrl) {
+                    previewHtml = `<div class="w-full h-28 rounded-xl bg-slate-100 dark:bg-zinc-800 mb-2 overflow-hidden relative">
+                        <img src="${file.dataUrl}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy">
+                    </div>`;
+                }
+
+                div.innerHTML = `
+                    <div onclick="openLightbox(${index})" class="cursor-pointer">
+                        ${previewHtml}
+                        <h5 class="text-xs font-semibold truncate mb-1" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</h5>
+                    </div>
+                    <div class="flex items-center justify-between text-[10px] text-slate-400 pt-1">
+                        <span>${formatBytes(file.size)}</span>
+                        <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onclick="openShareModal('${file.id}')" class="p-1 hover:text-blue-500"><i class="fa-solid fa-share-nodes"></i></button>
+                            <button onclick="deleteFile('${file.id}')" class="p-1 hover:text-red-500"><i class="fa-solid fa-trash-can"></i></button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                div.className = "group bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800/80 rounded-xl p-2.5 flex items-center justify-between shadow-sm hover:border-blue-500 transition col-span-full";
+                div.innerHTML = `
+                    <div onclick="openLightbox(${index})" class="flex items-center space-x-3 overflow-hidden flex-1 cursor-pointer">
+                        <i class="${iconClass} text-blue-500 text-sm shrink-0"></i>
+                        <span class="text-xs font-medium truncate">${escapeHtml(file.name)}</span>
+                    </div>
+                    <div class="flex items-center space-x-4 text-xs">
+                        <span class="text-slate-400 text-[11px]">${formatBytes(file.size)}</span>
+                        <button onclick="openShareModal('${file.id}')" class="text-slate-400 hover:text-blue-500"><i class="fa-solid fa-share-nodes"></i></button>
+                        <button onclick="deleteFile('${file.id}')" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                `;
+            }
+            return div;
+        }
+
+        // --- UPLOAD HANDLER ---
+        function triggerFileUpload() {
+            document.getElementById('fileInput').click();
+        }
+
+        async function handleFileUpload(event) {
+            const files = Array.from(event.target.files);
+            if (files.length === 0) return;
+
+            const progressContainer = document.getElementById('uploadProgressContainer');
+            const progressBar = document.getElementById('uploadProgressBar');
+            const statusText = document.getElementById('uploadStatusText');
+            const percentText = document.getElementById('uploadPercentText');
+
+            progressContainer.classList.remove('hidden');
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                statusText.innerText = `Uploading ${file.name}... (${i + 1}/${files.length})`;
+
+                if (fbStorage && fbDb) {
+                    // Firebase Storage Upload
+                    try {
+                        const { ref, uploadBytesResumable, getDownloadURL, doc, setDoc } = window.FirebaseSDK;
+                        const fileId = 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+                        const storageRef = ref(fbStorage, `uploads/${fileId}_${file.name}`);
+                        
+                        const uploadTask = uploadBytesResumable(storageRef, file);
+
+                        await new Promise((resolve, reject) => {
+                            uploadTask.on('state_changed', 
+                                (snapshot) => {
+                                    const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                                    progressBar.style.width = `${pct}%`;
+                                    percentText.innerText = `${pct}%`;
+                                }, 
+                                (error) => reject(error), 
+                                async () => {
+                                    const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                                    await setDoc(doc(fbDb, "cloud_files", fileId), {
+                                        name: file.name,
+                                        type: file.type,
+                                        size: file.size,
+                                        dataUrl: downloadUrl,
+                                        folderId: currentFolderId,
+                                        createdAt: new Date().toISOString()
+                                    });
+                                    resolve();
+                                }
+                            );
+                        });
+                    } catch (err) {
+                        console.error(err);
+                        showToast("Failed uploading " + file.name, "error");
+                    }
+                } else {
+                    // Local Storage Fallback Upload
+                    await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const newFile = {
+                                id: 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                                name: file.name,
+                                type: file.type,
+                                size: file.size,
+                                dataUrl: e.target.result,
+                                folderId: currentFolderId,
+                                createdAt: new Date().toISOString()
+                            };
+                            driveData.files.push(newFile);
+                            saveLocalData();
+                            resolve();
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                }
+            }
+
+            progressContainer.classList.add('hidden');
+            event.target.value = '';
+            showToast("Upload completed successfully!");
+            render();
+        }
+
+        // --- FOLDER ACTIONS ---
+        function openNewFolderModal() {
+            document.getElementById('folderNameInput').value = '';
+            document.getElementById('folderModal').classList.remove('hidden');
+        }
+
+        async function createNewFolder() {
+            const name = document.getElementById('folderNameInput').value.trim();
+            if (!name) return;
+
+            const folderId = 'f_' + Date.now();
+            const newFolder = {
+                id: folderId,
+                name: name,
+                parentId: currentFolderId,
+                createdAt: new Date().toISOString()
+            };
+
+            if (fbDb) {
+                const { doc, setDoc } = window.FirebaseSDK;
+                await setDoc(doc(fbDb, "cloud_folders", folderId), newFolder);
+            } else {
+                driveData.folders.push(newFolder);
+                saveLocalData();
+                render();
+            }
+
+            closeModal('folderModal');
+            showToast("Folder created");
+        }
+
+        function openFolder(id, name) {
+            currentFolderId = id;
+            folderStack.push({ id, name });
+            render();
+        }
+
+        function navigateBreadcrumb(idx) {
+            folderStack = folderStack.slice(0, idx + 1);
+            currentFolderId = folderStack[folderStack.length - 1].id;
+            render();
+        }
+
+        function renderBreadcrumbs() {
+            const nav = document.getElementById('breadcrumbs');
+            nav.innerHTML = '';
+
+            folderStack.forEach((item, index) => {
+                const isLast = index === folderStack.length - 1;
+                if (index > 0) {
+                    nav.innerHTML += `<i class="fa-solid fa-chevron-right text-[10px] text-slate-400 mx-1"></i>`;
+                }
+
+                const btn = document.createElement('button');
+                btn.className = `px-2 py-1 rounded-lg text-xs font-semibold ${isLast ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-800'}`;
+                btn.innerText = item.name;
+                if (!isLast) btn.onclick = () => navigateBreadcrumb(index);
+                nav.appendChild(btn);
+            });
+        }
+
+        // --- LIGHTBOX & GALLERY ---
+        function openLightbox(index) {
+            const files = driveData.files.filter(f => f.folderId === currentFolderId || filterCategory !== 'all');
+            if (index < 0 || index >= files.length) return;
+
+            lightboxIndex = index;
+            const file = files[index];
+            const modal = document.getElementById('lightboxModal');
+            const container = document.getElementById('lightboxMediaContainer');
+
+            document.getElementById('lightboxTitle').innerText = file.name;
+            document.getElementById('lightboxMetaSize').innerText = formatBytes(file.size);
+            document.getElementById('lightboxMetaDate').innerText = new Date(file.createdAt).toLocaleDateString();
+            document.getElementById('lightboxDownloadBtn').href = file.dataUrl;
+
+            container.innerHTML = '';
+            currentZoom = 1;
+
+            if (file.type && file.type.startsWith('image/')) {
+                container.innerHTML = `<img id="lightboxImg" src="${file.dataUrl}" class="max-h-[80vh] max-w-full object-contain rounded-xl shadow-2xl transition-transform">`;
+            } else if (file.type && file.type.startsWith('video/')) {
+                container.innerHTML = `<video src="${file.dataUrl}" controls class="max-h-[80vh] w-full rounded-xl"></video>`;
+            } else {
+                container.innerHTML = `
+                    <div class="text-center text-white">
+                        <i class="${getFileIcon(file.type)} text-6xl text-blue-400 mb-4"></i>
+                        <p class="text-sm font-semibold mb-2">${escapeHtml(file.name)}</p>
+                        <a href="${file.dataUrl}" download="${file.name}" class="px-4 py-2 bg-blue-600 rounded-xl text-xs font-bold inline-block">Download File</a>
+                    </div>
+                `;
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function zoomPhoto(factor) {
+            currentZoom *= factor;
+            const img = document.getElementById('lightboxImg');
+            if (img) img.style.transform = `scale(${currentZoom})`;
+        }
+
+        function navigateLightbox(dir) {
+            const files = driveData.files.filter(f => f.folderId === currentFolderId || filterCategory !== 'all');
+            let newIdx = lightboxIndex + dir;
+            if (newIdx >= 0 && newIdx < files.length) {
+                openLightbox(newIdx);
+            }
+        }
+
+        // --- DELETE & SHARE ---
+        async function deleteFile(id) {
+            if (fbDb) {
+                const { doc, deleteDoc } = window.FirebaseSDK;
+                await deleteDoc(doc(fbDb, "cloud_files", id));
+            } else {
+                driveData.files = driveData.files.filter(f => f.id !== id);
+                saveLocalData();
+                render();
+            }
+            showToast("File deleted");
+        }
+
+        async function deleteFolder(id, e) {
+            e.stopPropagation();
+            if (fbDb) {
+                const { doc, deleteDoc } = window.FirebaseSDK;
+                await deleteDoc(doc(fbDb, "cloud_folders", id));
+            } else {
+                driveData.folders = driveData.folders.filter(f => f.id !== id);
+                driveData.files = driveData.files.filter(f => f.folderId !== id);
+                saveLocalData();
+                render();
+            }
+            showToast("Folder deleted");
+        }
+
+        function openShareModal(id) {
+            const file = driveData.files.find(f => f.id === id);
+            if (!file) return;
+
+            const shareUrl = file.dataUrl.startsWith('http') ? file.dataUrl : `${window.location.origin}${window.location.pathname}?file=${file.id}`;
+            document.getElementById('shareUrlInput').value = shareUrl;
+            document.getElementById('shareModal').classList.remove('hidden');
+        }
+
+        function copyShareLink() {
+            const input = document.getElementById('shareUrlInput');
+            input.select();
+            document.execCommand('copy');
+            closeModal('shareModal');
+            showToast("Link copied to clipboard!");
+        }
+
+        // --- SETTINGS & CONFIG ---
+        function openConfigModal() {
+            if (firebaseConfig) {
+                document.getElementById('cfg_apiKey').value = firebaseConfig.apiKey || '';
+                document.getElementById('cfg_authDomain').value = firebaseConfig.authDomain || '';
+                document.getElementById('cfg_projectId').value = firebaseConfig.projectId || '';
+                document.getElementById('cfg_storageBucket').value = firebaseConfig.storageBucket || '';
+            }
+            document.getElementById('configModal').classList.remove('hidden');
+        }
+
+        function saveFirebaseConfig() {
+            const config = {
+                apiKey: document.getElementById('cfg_apiKey').value.trim(),
+                authDomain: document.getElementById('cfg_authDomain').value.trim(),
+                projectId: document.getElementById('cfg_projectId').value.trim(),
+                storageBucket: document.getElementById('cfg_storageBucket').value.trim(),
+            };
+
+            localStorage.setItem('mycloud_firebase_config', JSON.stringify(config));
+            firebaseConfig = config;
+            closeModal('configModal');
+            
+            if (initFirebase()) {
+                showToast("Connected to Firebase Cloud!");
+            }
+        }
+
+        function clearFirebaseConfig() {
+            localStorage.removeItem('mycloud_firebase_config');
+            firebaseConfig = null;
+            closeModal('configModal');
+            location.reload();
+        }
+
+        // --- UTILITY FUNCTIONS ---
+        function setFilterCategory(cat) {
+            filterCategory = cat;
+            ['all', 'photos', 'documents'].forEach(c => {
+                const el = document.getElementById(`nav-${c}`);
+                if (c === cat) {
+                    el.className = "w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-xs font-semibold bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400";
+                } else {
+                    el.className = "w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800/60 transition";
+                }
+            });
+            render();
+        }
+
+        function handleSearch() {
+            searchQuery = document.getElementById('searchInput').value;
+            document.getElementById('clearSearchBtn').classList.toggle('hidden', !searchQuery);
+            render();
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            searchQuery = '';
+            document.getElementById('clearSearchBtn').classList.add('hidden');
+            render();
+        }
+
+        function setViewMode(mode) {
+            viewMode = mode;
+            document.getElementById('gridViewBtn').className = mode === 'grid' ? "p-1.5 rounded-lg text-xs text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-700 shadow-sm" : "p-1.5 rounded-lg text-xs text-slate-400";
+            document.getElementById('listViewBtn').className = mode === 'list' ? "p-1.5 rounded-lg text-xs text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-700 shadow-sm" : "p-1.5 rounded-lg text-xs text-slate-400";
+            render();
+        }
+
+        function toggleDarkMode() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            document.getElementById('themeIcon').className = isDark ? "fa-solid fa-sun" : "fa-solid fa-moon";
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
+        }
+
+        function getFileIcon(type) {
+            if (!type) return 'fa-solid fa-file';
+            if (type.startsWith('image/')) return 'fa-solid fa-file-image';
+            if (type.startsWith('video/')) return 'fa-solid fa-file-video';
+            if (type.includes('pdf')) return 'fa-solid fa-file-pdf';
+            return 'fa-solid fa-file';
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function updateStorageMetrics() {
+            const totalBytes = driveData.files.reduce((a, b) => a + (b.size || 0), 0);
+            document.getElementById('storageCapacityText').innerText = `${formatBytes(totalBytes)} Used`;
+            const percent = Math.min(100, Math.round((totalBytes / (10 * 1024 * 1024)) * 100));
+            document.getElementById('storageProgressBar').style.width = `${percent}%`;
+            document.getElementById('storagePercentText').innerText = `${percent}%`;
+        }
+
+        function escapeHtml(str) {
+            return (str || '').replace(/[&<"']/g, m => ({ '&': '&amp;', '<': '&lt;', '"': '&quot;', "'": '&#039;' }[m]));
+        }
+
+        // Drag & Drop Setup
+        const dropArea = document.getElementById('dropArea');
+        const dragOverlay = document.getElementById('dragOverlay');
+
+        ['dragenter', 'dragover'].forEach(name => {
+            dropArea.addEventListener(name, (e) => {
+                e.preventDefault();
+                dragOverlay.classList.remove('opacity-0');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(name => {
+            dropArea.addEventListener(name, (e) => {
+                e.preventDefault();
+                dragOverlay.classList.add('opacity-0');
+            });
+        });
+
+        dropArea.addEventListener('drop', (e) => {
+            handleFileUpload({ target: { files: e.dataTransfer.files } });
+        });
+
+        // App Initialization
+        window.onload = function() {
+            setTimeout(() => {
+                initFirebase();
+                render();
+            }, 300);
+        };
+    </script>
+</body>
+</html>
