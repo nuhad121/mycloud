@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Cloud Drive</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        drive: {
+                            blue: '#1a73e8',
+                            hover: '#1557b0',
+                            bgLight: '#f8f9fa',
+                            bgDark: '#171717',
+                            cardDark: '#262626'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for clean aesthetic */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.4);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(156, 163, 175, 0.7);
+        }
+    </style>
+</head>
+<body class="bg-drive-bgLight dark:bg-drive-bgDark text-gray-800 dark:text-gray-100 font-sans transition-colors duration-200 antialiased h-screen flex flex-col overflow-hidden">
+
+    <!-- HEADER / TOP NAVBAR -->
+    <header class="h-16 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-4 flex items-center justify-between shrink-0 z-10">
+        <!-- Logo & Title -->
+        <div class="flex items-center space-x-3 w-60">
+            <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+                <i class="fa-solid font-bold text-xl fa-hard-drive"></i>
+            </div>
+            <span class="font-bold text-lg tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+                Personal Drive
+            </span>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="flex-1 max-w-2xl mx-4">
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                <input type="text" id="searchInput" oninput="handleSearch()" 
+                       placeholder="Search files and folders..." 
+                       class="w-full pl-10 pr-10 py-2 bg-gray-100 dark:bg-zinc-800 border-none rounded-xl focus:ring-2 focus:ring-blue-500 text-sm placeholder-gray-500 transition-all">
+                <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Theme Toggle & Storage Status -->
+        <div class="flex items-center space-x-3">
+            <button onclick="toggleDarkMode()" class="p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-600 dark:text-gray-300 transition-colors">
+                <i id="themeIcon" class="fa-solid fa-moon"></i>
+            </button>
+            <div class="hidden sm:flex items-center space-x-2 bg-gray-100 dark:bg-zinc-800 px-3 py-1.5 rounded-xl text-xs font-medium">
+                <i class="fa-solid fa-cloud text-blue-500"></i>
+                <span id="storageText">0 MB / Local</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN BODY SECTION -->
+    <div class="flex flex-1 overflow-hidden relative">
+        
+        <!-- SIDEBAR -->
+        <aside class="w-60 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 flex flex-col justify-between p-4 shrink-0 hidden md:flex">
+            <div class="space-y-4">
+                <!-- Action Buttons -->
+                <div class="space-y-2">
+                    <button onclick="triggerFileUpload()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl shadow-lg shadow-blue-600/20 flex items-center justify-center space-x-2 transition-all active:scale-[0.98]">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Upload File</span>
+                    </button>
+                    <input type="file" id="fileInput" class="hidden" onchange="handleFileUpload(event)">
+
+                    <button onclick="openNewFolderModal()" class="w-full bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-200 font-medium py-2.5 px-4 rounded-xl flex items-center justify-center space-x-2 transition-all">
+                        <i class="fa-solid fa-folder-plus text-amber-500"></i>
+                        <span>New Folder</span>
+                    </button>
+                </div>
+
+                <!-- Navigation List -->
+                <nav class="space-y-1 pt-4 border-t border-gray-100 dark:border-gray-800">
+                    <button onclick="navigateToRoot()" class="w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-sm font-medium bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+                        <i class="fa-solid fa-hard-drive"></i>
+                        <span>My Storage</span>
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Storage Progress Bar -->
+            <div class="p-3 bg-gray-50 dark:bg-zinc-800/50 rounded-xl space-y-2">
+                <div class="flex justify-between text-xs font-semibold">
+                    <span class="text-gray-500">Storage Used</span>
+                    <span id="storagePercentText">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-zinc-700 h-2 rounded-full overflow-hidden">
+                    <div id="storageProgressBar" class="bg-blue-600 h-full w-0 transition-all duration-300"></div>
+                </div>
+                <p class="text-[10px] text-gray-400">Stored inside browser Local Storage</p>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT CONTAINER -->
+        <main class="flex-1 flex flex-col overflow-hidden bg-white/50 dark:bg-zinc-900/30">
+            
+            <!-- Breadcrumbs & Bar Controls -->
+            <div class="p-4 flex flex-wrap gap-2 items-center justify-between border-b border-gray-100 dark:border-gray-800 shrink-0">
+                
+                <!-- Path Breadcrumbs -->
+                <nav id="breadcrumbs" class="flex items-center space-x-2 text-sm font-medium overflow-x-auto py-1">
+                    <!-- Dynamic Breadcrumbs loaded here -->
+                </nav>
+
+                <!-- Mobile Action bar & Controls -->
+                <div class="flex items-center space-x-2 ml-auto">
+                    <!-- Mobile trigger upload -->
+                    <button onclick="triggerFileUpload()" class="md:hidden p-2 rounded-xl bg-blue-600 text-white shadow">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                    <button onclick="openNewFolderModal()" class="md:hidden p-2 rounded-xl bg-gray-100 dark:bg-zinc-800 text-amber-500">
+                        <i class="fa-solid fa-folder-plus"></i>
+                    </button>
+
+                    <!-- View Switcher -->
+                    <div class="flex items-center bg-gray-100 dark:bg-zinc-800 p-1 rounded-xl">
+                        <button onclick="setViewMode('grid')" id="gridViewBtn" class="p-1.5 rounded-lg text-sm text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-700 shadow-sm">
+                            <i class="fa-solid fa-grip"></i>
+                        </button>
+                        <button onclick="setViewMode('list')" id="listViewBtn" class="p-1.5 rounded-lg text-sm text-gray-400">
+                            <i class="fa-solid fa-list"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FILE / FOLDER CONTAINER -->
+            <div class="flex-1 overflow-y-auto p-4 md:p-6" id="dropArea">
+                
+                <!-- Empty State Banner -->
+                <div id="emptyState" class="hidden h-full flex-col items-center justify-center text-center p-8">
+                    <div class="w-20 h-20 bg-blue-50 dark:bg-zinc-800 text-blue-500 rounded-3xl flex items-center justify-center text-3xl mb-4">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                    </div>
+                    <h3 class="font-semibold text-lg mb-1">No items here yet</h3>
+                    <p class="text-sm text-gray-400 max-w-sm mb-4">Upload files or create new folders to get started with your personal cloud.</p>
+                    <button onclick="triggerFileUpload()" class="px-4 py-2 bg-blue-600 text-white font-medium text-sm rounded-xl hover:bg-blue-700 transition">
+                        Upload First File
+                    </button>
+                </div>
+
+                <!-- Folders Grid/List Section -->
+                <div id="foldersSection" class="mb-6 hidden">
+                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Folders</h4>
+                    <div id="foldersContainer" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                        <!-- Folders inject here -->
+                    </div>
+                </div>
+
+                <!-- Files Grid/List Section -->
+                <div id="filesSection" class="hidden">
+                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Files</h4>
+                    <div id="filesContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                        <!-- Files inject here -->
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL: NEW FOLDER -->
+    <div id="folderModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-gray-800 w-full max-w-md rounded-2xl p-6 shadow-2xl transition-all">
+            <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-folder-plus text-amber-500"></i> Create New Folder
+            </h3>
+            <input type="text" id="folderNameInput" placeholder="Folder Name" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-6 text-sm">
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeModal('folderModal')" class="px-4 py-2 text-sm font-medium rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800 transition">Cancel</button>
+                <button onclick="createNewFolder()" class="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-600/20">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: SHARE LINK -->
+    <div id="shareModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-gray-800 w-full max-w-md rounded-2xl p-6 shadow-2xl transition-all">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-share-nodes text-blue-500"></i> Share File
+                </h3>
+                <button onclick="closeModal('shareModal')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p class="text-xs text-gray-500 mb-4">Anyone with this link can view or download this file.</p>
+            <div class="flex items-center space-x-2 bg-gray-50 dark:bg-zinc-800 p-2 rounded-xl border border-gray-200 dark:border-gray-700 mb-6">
+                <input type="text" id="shareUrlInput" readonly class="bg-transparent border-none text-xs w-full focus:outline-none text-gray-600 dark:text-gray-300">
+                <button onclick="copyShareLink()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition shrink-0 flex items-center gap-1">
+                    <i class="fa-regular fa-copy"></i>
+                    <span>Copy</span>
+                </button>
+            </div>
+            <div id="copySuccessMsg" class="hidden text-xs text-green-500 text-center font-medium">
+                <i class="fa-solid fa-circle-check"></i> Link copied to clipboard!
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: FILE PREVIEW -->
+    <div id="previewModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center hidden p-4">
+        <div class="relative w-full max-w-4xl max-h-[90vh] bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden flex flex-col shadow-2xl">
+            <!-- Modal Header -->
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between shrink-0">
+                <div class="flex items-center space-x-2 overflow-hidden">
+                    <i id="previewIcon" class="text-blue-500 text-lg"></i>
+                    <span id="previewTitle" class="font-semibold text-sm truncate">Filename.ext</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <a id="previewDownloadBtn" download href="#" class="p-2 text-gray-500 hover:text-blue-500 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800">
+                        <i class="fa-solid fa-download"></i>
+                    </a>
+                    <button onclick="closeModal('previewModal')" class="p-2 text-gray-500 hover:text-red-500 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+            <!-- Preview Content Container -->
+            <div id="previewContent" class="flex-1 overflow-auto p-4 flex items-center justify-center min-h-[300px]">
+                <!-- Dynamic Preview Injected Here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT APP LOGIC -->
+    <script>
+        // --- DATA STATE MANAGEMENT ---
+        let currentFolderId = 'root';
+        let folderStack = [{ id: 'root', name: 'My Drive' }];
+        let viewMode = 'grid'; // 'grid' | 'list'
+        let searchQuery = '';
+
+        // Initialize state from LocalStorage or Default
+        let driveData = JSON.parse(localStorage.getItem('personal_drive_data')) || {
+            folders: [
+                { id: 'f_docs', name: 'Documents', parentId: 'root', createdAt: new Date().toISOString() },
+                { id: 'f_pics', name: 'Pictures', parentId: 'root', createdAt: new Date().toISOString() }
+            ],
+            files: []
+        };
+
+        // Save State
+        function saveData() {
+            localStorage.setItem('personal_drive_data', JSON.stringify(driveData));
+            updateStorageUsage();
+        }
+
+        // --- RENDER FUNCTION ---
+        function render() {
+            const foldersContainer = document.getElementById('foldersContainer');
+            const filesContainer = document.getElementById('filesContainer');
+            const foldersSection = document.getElementById('foldersSection');
+            const filesSection = document.getElementById('filesSection');
+            const emptyState = document.getElementById('emptyState');
+
+            foldersContainer.innerHTML = '';
+            filesContainer.innerHTML = '';
+
+            // Filter by parent folder and search term
+            let folders = driveData.folders.filter(f => f.parentId === currentFolderId);
+            let files = driveData.files.filter(f => f.folderId === currentFolderId);
+
+            if (searchQuery.trim() !== '') {
+                const query = searchQuery.toLowerCase();
+                folders = driveData.folders.filter(f => f.name.toLowerCase().includes(query));
+                files = driveData.files.filter(f => f.name.toLowerCase().includes(query));
+            }
+
+            const isEmpty = folders.length === 0 && files.length === 0;
+
+            if (isEmpty) {
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+                foldersSection.classList.add('hidden');
+                filesSection.classList.add('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+
+                // Render Folders
+                if (folders.length > 0) {
+                    foldersSection.classList.remove('hidden');
+                    folders.forEach(folder => {
+                        foldersContainer.appendChild(createFolderCard(folder));
+                    });
+                } else {
+                    foldersSection.classList.add('hidden');
+                }
+
+                // Render Files
+                if (files.length > 0) {
+                    filesSection.classList.remove('hidden');
+                    files.forEach(file => {
+                        filesContainer.appendChild(createFileCard(file));
+                    });
+                } else {
+                    filesSection.classList.add('hidden');
+                }
+            }
+
+            renderBreadcrumbs();
+            updateStorageUsage();
+        }
+
+        // --- CARD BUILDERS ---
+        function createFolderCard(folder) {
+            const div = document.createElement('div');
+            
+            if (viewMode === 'grid') {
+                div.className = "group relative bg-white dark:bg-zinc-800/80 border border-gray-200/80 dark:border-gray-800 rounded-xl p-3.5 flex items-center justify-between shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-blue-400";
+                div.innerHTML = `
+                    <div onclick="openFolder('${folder.id}', '${escapeHtml(folder.name)}')" class="flex items-center space-x-3 overflow-hidden flex-1">
+                        <i class="fa-solid fa-folder text-amber-500 text-xl shrink-0"></i>
+                        <span class="text-sm font-medium truncate">${escapeHtml(folder.name)}</span>
+                    </div>
+                    <button onclick="deleteFolder('${folder.id}', event)" class="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 rounded-lg transition-opacity">
+                        <i class="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                `;
+            } else {
+                div.className = "group relative bg-white dark:bg-zinc-800/80 border border-gray-200/80 dark:border-gray-800 rounded-xl p-3 flex items-center justify-between shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-blue-400 col-span-full";
+                div.innerHTML = `
+                    <div onclick="openFolder('${folder.id}', '${escapeHtml(folder.name)}')" class="flex items-center space-x-3 overflow-hidden flex-1">
+                        <i class="fa-solid fa-folder text-amber-500 text-lg shrink-0"></i>
+                        <span class="text-sm font-medium truncate">${escapeHtml(folder.name)}</span>
+                    </div>
+                    <span class="text-xs text-gray-400 mr-4">Folder</span>
+                    <button onclick="deleteFolder('${folder.id}', event)" class="p-1.5 text-gray-400 hover:text-red-500 rounded-lg">
+                        <i class="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                `;
+            }
+            return div;
+        }
+
+        function createFileCard(file) {
+            const div = document.createElement('div');
+            const iconClass = getFileIcon(file.type);
+
+            if (viewMode === 'grid') {
+                div.className = "group relative bg-white dark:bg-zinc-800/80 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-3.5 flex flex-col justify-between shadow-sm hover:shadow-md transition-all hover:border-blue-400";
+                div.innerHTML = `
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="w-10 h-10 rounded-xl bg-blue-50 dark:bg-zinc-700/50 flex items-center justify-center text-blue-500">
+                            <i class="${iconClass} text-lg"></i>
+                        </div>
+                        <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onclick="openShareModal('${file.id}')" class="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg" title="Share Link">
+                                <i class="fa-solid fa-share-nodes text-xs"></i>
+                            </button>
+                            <button onclick="deleteFile('${file.id}')" class="p-1.5 text-gray-400 hover:text-red-500 rounded-lg" title="Delete">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div onclick="previewFile('${file.id}')" class="cursor-pointer">
+                        <h5 class="text-sm font-semibold truncate mb-1" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</h5>
+                        <div class="flex items-center justify-between text-[11px] text-gray-400">
+                            <span>${formatBytes(file.size)}</span>
+                            <span>${new Date(file.createdAt).toLocaleDateString()}</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                div.className = "group relative bg-white dark:bg-zinc-800/80 border border-gray-200/80 dark:border-gray-800 rounded-xl p-3 flex items-center justify-between shadow-sm hover:shadow-md transition-all hover:border-blue-400 col-span-full";
+                div.innerHTML = `
+                    <div onclick="previewFile('${file.id}')" class="flex items-center space-x-3 overflow-hidden flex-1 cursor-pointer">
+                        <i class="${iconClass} text-blue-500 text-lg shrink-0"></i>
+                        <span class="text-sm font-medium truncate">${escapeHtml(file.name)}</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span class="text-xs text-gray-400">${formatBytes(file.size)}</span>
+                        <button onclick="openShareModal('${file.id}')" class="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg">
+                            <i class="fa-solid fa-share-nodes text-xs"></i>
+                        </button>
+                        <button onclick="deleteFile('${file.id}')" class="p-1.5 text-gray-400 hover:text-red-500 rounded-lg">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
+                `;
+            }
+            return div;
+        }
+
+        // --- ACTIONS & NAVIGATION ---
+        function openFolder(id, name) {
+            currentFolderId = id;
+            folderStack.push({ id, name });
+            render();
+        }
+
+        function navigateToBreadcrumb(index) {
+            folderStack = folderStack.slice(0, index + 1);
+            currentFolderId = folderStack[folderStack.length - 1].id;
+            render();
+        }
+
+        function navigateToRoot() {
+            folderStack = [{ id: 'root', name: 'My Drive' }];
+            currentFolderId = 'root';
+            render();
+        }
+
+        function renderBreadcrumbs() {
+            const nav = document.getElementById('breadcrumbs');
+            nav.innerHTML = '';
+
+            folderStack.forEach((item, index) => {
+                const isLast = index === folderStack.length - 1;
+                
+                if (index > 0) {
+                    const chevron = document.createElement('i');
+                    chevron.className = "fa-solid fa-chevron-right text-xs text-gray-400 mx-1";
+                    nav.appendChild(chevron);
+                }
+
+                const btn = document.createElement('button');
+                btn.className = `px-2 py-1 rounded-lg text-sm transition ${
+                    isLast 
+                    ? 'font-bold text-gray-800 dark:text-gray-100 cursor-default' 
+                    : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800'
+                }`;
+                btn.innerText = item.name;
+                if (!isLast) {
+                    btn.onclick = () => navigateToBreadcrumb(index);
+                }
+                nav.appendChild(btn);
+            });
+        }
+
+        // --- FILE UPLOADING ---
+        function triggerFileUpload() {
+            document.getElementById('fileInput').click();
+        }
+
+        function handleFileUpload(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const newFile = {
+                        id: 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                        name: file.name,
+                        type: file.type,
+                        size: file.size,
+                        dataUrl: e.target.result,
+                        folderId: currentFolderId,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    try {
+                        driveData.files.push(newFile);
+                        saveData();
+                        render();
+                    } catch (err) {
+                        alert('Storage limit reached! Please clear some files to free up space.');
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+
+            event.target.value = ''; // Reset input
+        }
+
+        // --- FOLDER CREATION ---
+        function openNewFolderModal() {
+            document.getElementById('folderNameInput').value = '';
+            document.getElementById('folderModal').classList.remove('hidden');
+            document.getElementById('folderNameInput').focus();
+        }
+
+        function createNewFolder() {
+            const nameInput = document.getElementById('folderNameInput');
+            const name = nameInput.value.trim();
+
+            if (name) {
+                const newFolder = {
+                    id: 'f_' + Date.now(),
+                    name: name,
+                    parentId: currentFolderId,
+                    createdAt: new Date().toISOString()
+                };
+                driveData.folders.push(newFolder);
+                saveData();
+                closeModal('folderModal');
+                render();
+            }
+        }
+
+        // --- DELETION ---
+        function deleteFile(id) {
+            driveData.files = driveData.files.filter(f => f.id !== id);
+            saveData();
+            render();
+        }
+
+        function deleteFolder(id, event) {
+            if (event) event.stopPropagation();
+            // Delete folder and its contents recursively
+            const foldersToDelete = [id];
+            
+            function collectSubfolders(targetId) {
+                const subs = driveData.folders.filter(f => f.parentId === targetId);
+                subs.forEach(s => {
+                    foldersToDelete.push(s.id);
+                    collectSubfolders(s.id);
+                });
+            }
+            collectSubfolders(id);
+
+            driveData.folders = driveData.folders.filter(f => !foldersToDelete.includes(f.id));
+            driveData.files = driveData.files.filter(f => !foldersToDelete.includes(f.folderId));
+            
+            saveData();
+            render();
+        }
+
+        // --- FILE PREVIEW ---
+        function previewFile(id) {
+            const file = driveData.files.find(f => f.id === id);
+            if (!file) return;
+
+            const modal = document.getElementById('previewModal');
+            const previewContent = document.getElementById('previewContent');
+            const previewTitle = document.getElementById('previewTitle');
+            const previewIcon = document.getElementById('previewIcon');
+            const downloadBtn = document.getElementById('previewDownloadBtn');
+
+            previewTitle.innerText = file.name;
+            previewIcon.className = `${getFileIcon(file.type)} text-blue-500 text-lg`;
+            downloadBtn.href = file.dataUrl;
+            downloadBtn.download = file.name;
+
+            previewContent.innerHTML = '';
+
+            if (file.type.startsWith('image/')) {
+                const img = document.createElement('img');
+                img.src = file.dataUrl;
+                img.className = "max-h-[70vh] w-auto rounded-lg object-contain shadow";
+                previewContent.appendChild(img);
+            } else if (file.type.startsWith('video/')) {
+                const video = document.createElement('video');
+                video.src = file.dataUrl;
+                video.controls = true;
+                video.className = "max-h-[70vh] w-full rounded-lg";
+                previewContent.appendChild(video);
+            } else if (file.type.startsWith('audio/')) {
+                const audio = document.createElement('audio');
+                audio.src = file.dataUrl;
+                audio.controls = true;
+                audio.className = "w-full max-w-md";
+                previewContent.appendChild(audio);
+            } else if (file.type === 'application/pdf') {
+                const iframe = document.createElement('iframe');
+                iframe.src = file.dataUrl;
+                iframe.className = "w-full h-[70vh] rounded-lg";
+                previewContent.appendChild(iframe);
+            } else {
+                previewContent.innerHTML = `
+                    <div class="text-center p-6">
+                        <i class="${getFileIcon(file.type)} text-5xl text-gray-400 mb-3"></i>
+                        <p class="text-sm font-medium mb-3">No preview available for this file type.</p>
+                        <a href="${file.dataUrl}" download="${file.name}" class="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold inline-block">Download File</a>
+                    </div>
+                `;
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        // --- SHARE LINK FEATURE ---
+        function openShareModal(id) {
+            const file = driveData.files.find(f => f.id === id);
+            if (!file) return;
+
+            // Generate a shareable URL anchor query parameter
+            const shareUrl = `${window.location.origin}${window.location.pathname}?shared_file=${file.id}`;
+            
+            document.getElementById('shareUrlInput').value = shareUrl;
+            document.getElementById('copySuccessMsg').classList.add('hidden');
+            document.getElementById('shareModal').classList.remove('hidden');
+        }
+
+        function copyShareLink() {
+            const input = document.getElementById('shareUrlInput');
+            input.select();
+            document.execCommand('copy');
+            
+            const msg = document.getElementById('copySuccessMsg');
+            msg.classList.remove('hidden');
+            setTimeout(() => msg.classList.add('hidden'), 3000);
+        }
+
+        // --- SEARCH & VIEW SWITCHER ---
+        function handleSearch() {
+            searchQuery = document.getElementById('searchInput').value;
+            const clearBtn = document.getElementById('clearSearchBtn');
+            if (searchQuery) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+            render();
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            searchQuery = '';
+            document.getElementById('clearSearchBtn').classList.add('hidden');
+            render();
+        }
+
+        function setViewMode(mode) {
+            viewMode = mode;
+            const gridBtn = document.getElementById('gridViewBtn');
+            const listBtn = document.getElementById('listViewBtn');
+
+            if (mode === 'grid') {
+                gridBtn.className = "p-1.5 rounded-lg text-sm text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-700 shadow-sm";
+                listBtn.className = "p-1.5 rounded-lg text-sm text-gray-400";
+            } else {
+                listBtn.className = "p-1.5 rounded-lg text-sm text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-700 shadow-sm";
+                gridBtn.className = "p-1.5 rounded-lg text-sm text-gray-400";
+            }
+            render();
+        }
+
+        // --- HELPER UTILITIES ---
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function toggleDarkMode() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            const icon = document.getElementById('themeIcon');
+            icon.className = isDark ? "fa-solid fa-sun" : "fa-solid fa-moon";
+        }
+
+        function getFileIcon(type) {
+            if (type.startsWith('image/')) return 'fa-solid fa-file-image';
+            if (type.startsWith('video/')) return 'fa-solid fa-file-video';
+            if (type.startsWith('audio/')) return 'fa-solid fa-file-audio';
+            if (type.includes('pdf')) return 'fa-solid fa-file-pdf';
+            if (type.includes('word') || type.includes('document')) return 'fa-solid fa-file-word';
+            if (type.includes('zip') || type.includes('compressed')) return 'fa-solid fa-file-zipper';
+            return 'fa-solid fa-file';
+        }
+
+        function formatBytes(bytes, decimals = 1) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        function updateStorageUsage() {
+            const totalBytes = driveData.files.reduce((acc, file) => acc + (file.size || 0), 0);
+            const formatted = formatBytes(totalBytes);
+            document.getElementById('storageText').innerText = `${formatted} Used`;
+
+            // Estimate based on ~5MB standard browser local storage quota limit
+            const percent = Math.min(100, Math.round((totalBytes / (5 * 1024 * 1024)) * 100));
+            document.getElementById('storageProgressBar').style.width = `${percent}%`;
+            document.getElementById('storagePercentText').innerText = `${percent}%`;
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/[&<"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        }
+
+        // Handle Drag & Drop File Upload
+        const dropArea = document.getElementById('dropArea');
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        dropArea.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFileUpload({ target: { files } });
+        });
+
+        // Initialize App
+        window.onload = function() {
+            render();
+        };
+    </script>
+</body>
+</html>
